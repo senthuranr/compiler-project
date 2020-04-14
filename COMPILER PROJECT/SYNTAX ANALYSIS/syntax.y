@@ -1,0 +1,388 @@
+%{
+	int yylineno;
+	char data_type[200];
+%}
+
+%expect 19
+
+%nonassoc NO_ELSE
+%nonassoc  ELSE 
+%left '<' '>' '=' GE LE EQ NE 
+%left  '+'  '-'
+%left  '*'  '/' '%'
+%left  '|'
+%left  '&'
+%token ID CON STRG SIZEOF
+%token PTR INC DEC LEFT RIGHT LE GE EQ NE
+%token AND OR MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
+%token SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
+%token XOR_ASSIGN OR_ASSIGN DEF
+%token TYPEDEF EXTERN STATIC AUTO REGISTER
+%token CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID
+%token STRUCT UNION ENUM 
+%token CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
+%start BEGIN
+
+%union{
+	char str[1000];
+}
+
+%%
+
+BEGIN
+	: EDCL
+	| BEGIN EDCL
+	| DEFINE BEGIN
+	;
+
+PRIEXPR
+	: ID { insertToH($<str>1, data_type , yylineno); }
+	| CON
+	| STRG
+	| '(' EXPR ')'
+	;
+
+DEFINE
+	: DEF
+	;
+
+POSTEXPR
+	: PRIEXPR
+	| POSTEXPR '[' EXPR ']'
+	| POSTEXPR '(' ')'
+	| POSTEXPR '(' ARGLIST ')'
+	| POSTEXPR '.' ID
+	| POSTEXPR PTR ID
+	| POSTEXPR INC
+	| POSTEXPR DEC
+	;
+
+ARGLIST
+	: ASSIGNEXPR
+	| ARGLIST ',' ASSIGNEXPR
+	;
+
+UEXPR
+	: POSTEXPR
+	| INC UEXPR
+	| DEC UEXPR
+	| UOP CASTEXPR
+	| SIZEOF UEXPR
+	| SIZEOF '(' TYPE ')'
+	;
+
+UOP
+	: '&'
+	| '*'
+	| '+'
+	| '-'
+	| '~'
+	| '!'
+	;
+
+CASTEXPR
+	: UEXPR
+	| '(' TYPE ')' CASTEXPR
+	;
+
+MULEXPR
+	: CASTEXPR
+	| MULEXPR '*' CASTEXPR
+	| MULEXPR '/' CASTEXPR
+	| MULEXPR '%' CASTEXPR
+	;
+
+ADDEXPR
+	: MULEXPR
+	| ADDEXPR '+' MULEXPR
+	| ADDEXPR '-' MULEXPR
+	;
+
+SHIFTEXPR
+	: ADDEXPR
+	| SHIFTEXPR LEFT ADDEXPR
+	| SHIFTEXPR RIGHT ADDEXPR
+	;
+
+RELEXPR
+	: SHIFTEXPR
+	| RELEXPR '<' SHIFTEXPR
+	| RELEXPR '>' SHIFTEXPR
+	| RELEXPR LE SHIFTEXPR
+	| RELEXPR GE SHIFTEXPR
+	;
+
+EQEXPR
+	: RELEXPR
+	| EQEXPR EQ RELEXPR
+	| EQEXPR NE RELEXPR
+	;
+
+ANDEXPR
+	: EQEXPR
+	| ANDEXPR '&' EQEXPR
+	;
+
+EXOREXPR
+	: ANDEXPR
+	| EXOREXPR '^' ANDEXPR
+	;
+
+INOREXP
+	: EXOREXPR
+	| INOREXP '|' EXOREXPR
+	;
+
+LANDEXP
+	: INOREXP
+	| LANDEXP AND INOREXP
+	;
+
+LOREXP
+	: LANDEXP
+	| LOREXP OR LANDEXP
+	;
+
+CONDEXP
+	: LOREXP
+	| LOREXP '?' EXPR ':' CONDEXP
+	;
+
+ASSIGNEXPR
+	: CONDEXP
+	| UEXPR ASSIGNOP ASSIGNEXPR
+	;
+
+ASSIGNOP
+	: '='
+	| MUL_ASSIGN
+	| DIV_ASSIGN
+	| MOD_ASSIGN
+	| ADD_ASSIGN
+	| SUB_ASSIGN
+	| LEFT_ASSIGN
+	| RIGHT_ASSIGN
+	| AND_ASSIGN
+	| XOR_ASSIGN
+	| OR_ASSIGN
+	;
+
+EXPR
+	: ASSIGNEXPR
+	| EXPR ',' ASSIGNEXPR
+	;
+
+CONSTEXP
+	: CONDEXP
+	;
+
+DCL
+	: DCLSPEC ';'
+	| DCLSPEC INITDCLLIST ';'
+	;
+
+DCLSPEC
+	: STCLSPEC
+	| STCLSPEC DCLSPEC
+	| TYPESPEC	{ strcpy(data_type, $<str>1); }
+	| TYPESPEC DCLSPEC
+	;
+
+INITDCLLIST
+	: INITDCLR
+	| INITDCLLIST ',' INITDCLR
+	;
+
+INITDCLR
+	: DCLR
+	| DCLR '=' INIT
+	;
+
+STCLSPEC
+	: TYPEDEF
+	| EXTERN
+	| STATIC
+	| AUTO
+	| REGISTER
+	;
+
+TYPESPEC
+	: VOID
+	| CHAR
+	| SHORT
+	| INT
+	| LONG
+	| FLOAT
+	| DOUBLE
+	| SIGNED
+	| UNSIGNED
+	| SUSPEC
+	;
+
+SPECQLIST
+	: TYPESPEC SPECQLIST
+	| TYPESPEC
+	| CONST SPECQLIST
+	| CONST
+	;
+
+SUSPEC
+	: SU ID '{' STDCLLIST '}' ';'
+	| SU '{' STDCLLIST '}' ';'
+	| SU ID ';'
+	;
+
+SU
+	: STRUCT
+	| UNION
+	;
+
+STDCLLIST
+	: STRDCL
+	| STDCLLIST STRDCL
+	;
+
+STRDCL
+	: SPECQLIST STRDCLLIST ';'
+	;
+
+
+STRDCLLIST
+	: DCLR
+	| STRDCLLIST ',' DCLR
+	;
+
+DCLR
+	: PNTR DD
+	| DD
+	;
+
+DD
+	: ID
+	| '(' DCLR ')'
+	| DD '[' CONSTEXP ']'
+	| DD '[' ']'
+	| DD '(' PARALIST ')'
+	| DD '(' IDLIST ')'
+	| DD '(' ')'
+	;
+
+PNTR
+	: '*'
+	| '*' PNTR
+	;
+
+PARALIST
+	: PARADCL
+	| PARALIST ',' PARADCL
+	;
+
+PARADCL
+	: DCLSPEC DCLR
+	| DCLSPEC
+	;
+
+IDLIST
+	: ID
+	| IDLIST ',' ID
+	;
+
+TYPE
+	: SPECQLIST
+	| SPECQLIST DCLR
+	;
+
+INIT
+	: ASSIGNEXPR
+	| '{' INITLIST '}'
+	| '{' INITLIST ',' '}'
+	;
+
+INITLIST
+	: INIT
+	| INITLIST ',' INIT
+	;
+
+STMT
+	: CPNDSTMT
+	| EXPSTMT
+	| SELSTMT
+	| ITESTMT
+	| JMPSTMT
+	;
+
+CPNDSTMT
+	: '{' '}'
+	| '{' STMTLIST '}'
+	| '{' DCLLIST '}'
+	| '{' DCLLIST STMTLIST '}'
+	;
+
+DCLLIST
+	: DCL
+	| DCLLIST DCL
+	;
+
+STMTLIST
+	: STMT
+	| STMTLIST STMT
+	;
+
+EXPSTMT
+	: ';'
+	| EXPR ';'
+	;
+
+SELSTMT
+	: IF '(' EXPR ')' STMT    %prec NO_ELSE
+	| IF '(' EXPR ')' STMT ELSE STMT
+	;
+
+ITESTMT
+	: WHILE '(' EXPR ')' STMT
+	| DO STMT WHILE '(' EXPR ')' ';'
+	| FOR '(' EXPSTMT EXPSTMT ')' STMT
+	| FOR '(' EXPSTMT EXPSTMT EXPR ')' STMT
+	;
+
+JMPSTMT
+	: CONTINUE ';'
+	| BREAK ';'
+	| RETURN ';'
+	| RETURN EXPR ';'
+	;
+
+EDCL
+	: FUNCDEF
+	| DCL
+	;
+
+FUNCDEF
+	: DCLSPEC DCLR DCLLIST CPNDSTMT
+	| DCLSPEC DCLR CPNDSTMT
+	| DCLR DCLLIST CPNDSTMT
+	| DCLR CPNDSTMT
+	;
+%%
+
+#include "lex.yy.c"
+#include <stdio.h>
+#include <string.h>
+int main(int argc, char *argv[])
+{
+	yyin = fopen(argv[1], "r");
+	if(!yyparse())
+		printf("\nParsing complete\n");
+	else
+		printf("\nParsing failed\n");
+
+	fclose(yyin);
+	display();
+	disp();
+	return 0;
+}
+//extern int lineno;
+extern char *yytext;
+yyerror(char *s) {
+	printf("\nLine %d : %s\n", (yylineno), s);
+}         
